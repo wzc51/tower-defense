@@ -184,10 +184,6 @@ class GameScene extends Phaser.Scene {
     this.towerSpotZones = [];
     
     this.currentLevel.towerSpots.forEach((spot, index) => {
-      // 先画一层底色遮住地图上的数字
-      const cover = this.add.circle(spot.x, spot.y, 22, 0xc8b88a, 0.85);
-      cover.setDepth(1);
-      
       // 半透明光圈表示可建造位置
       const circle = this.add.circle(spot.x, spot.y, 28, 0xffff00, 0.15);
       circle.setStrokeStyle(1.5, 0xffff00, 0.4);
@@ -211,7 +207,7 @@ class GameScene extends Phaser.Scene {
         this.handleSpotClick(spot, circle);
       });
       
-      this.towerSpotZones.push({ spot, circle, cover });
+      this.towerSpotZones.push({ spot, circle });
     });
   }
 
@@ -312,19 +308,13 @@ class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut'
     });
     
-    // 隐藏塔位标记和数字遮罩
+    // 隐藏塔位标记
     circle.setFillStyle(0xffff00, 0.05);
     circle.setStrokeStyle(1, 0xffff00, 0.1);
     circle.disableInteractive();
     
-    // 找到对应的cover并隐藏
-    const spotData = this.towerSpotZones.find(z => z.spot === spot);
-    if (spotData && spotData.cover) {
-      spotData.cover.setAlpha(0);
-    }
-    
-    // 更新所选塔类型（继续建造同类型）
-    // this.selectedTowerType = null; // 取消注释则每次造完需要重新选择
+    // 每次造完清空选择，下次点击其他塔位重新弹出菜单
+    this.selectedTowerType = null;
     
     // 金币扣除
     this.gold -= config.cost;
