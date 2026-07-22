@@ -18,7 +18,7 @@ class Tower extends Phaser.GameObjects.Container {
     this.golems = []; // 石垒召唤的小石头人
 
     // 塔本体：使用 PNG 素材
-    this.towerSprite = scene.add.sprite(0, 0, config.imageKey);
+    this.towerSprite = scene.add.sprite(0, -15, config.imageKey);
     this.towerSprite.setScale(0.16);
     this.add(this.towerSprite);
 
