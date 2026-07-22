@@ -12,8 +12,11 @@ class BootScene extends Phaser.Scene {
     this.load.image('tower_ember_spirit', 'assets/images/towers/ember_spirit.png');
     this.load.image('tower_stone_wall', 'assets/images/towers/stone_wall.png');
 
-    // 加载敌人素材
-    this.load.image('enemy_imp', 'assets/images/enemies/imp_front.png');
+    // 加载敌人精灵表（4帧：左/正/右/背）
+    this.load.spritesheet('enemy_mage', 'assets/images/enemies/enemy_spritesheet.png', {
+      frameWidth: 249,
+      frameHeight: 278
+    });
 
     // 加载小石头人素材
     this.load.image('stone_golem', 'assets/images/enemies/stone_golem.png');
@@ -52,6 +55,19 @@ class BootScene extends Phaser.Scene {
     gfx.fillCircle(2, 2, 2);
     gfx.generateTexture('bullet', 4, 4);
     gfx.destroy();
+
+    // 创建敌人行走动画（上下弹跳感）
+    this.anims.create({
+      key: 'mage_walk',
+      frames: [
+        { key: 'enemy_mage', frame: 0 },
+        { key: 'enemy_mage', frame: 2 },
+        { key: 'enemy_mage', frame: 0 },
+        { key: 'enemy_mage', frame: 2 }
+      ],
+      frameRate: 6,
+      repeat: -1
+    });
 
     this.scene.start('GameScene');
   }

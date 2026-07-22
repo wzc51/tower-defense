@@ -17,16 +17,10 @@ class Tower extends Phaser.GameObjects.Container {
     this.isAttacking = false;
     this.golems = []; // 石垒召唤的小石头人
 
-    // 塔本体：使用 PNG 素材
+    // 塔本体：使用 PNG 素材，比例调大让底座匹配塔位圈（半径28px ≈ 直径56px）
     this.towerSprite = scene.add.sprite(0, 0, config.imageKey);
-    this.towerSprite.setScale(0.065);
+    this.towerSprite.setScale(0.12);
     this.add(this.towerSprite);
-
-    // 底座光圈（半透明地基）
-    this.baseCircle = scene.add.graphics();
-    this.baseCircle.fillStyle(0xffffff, 0.06);
-    this.baseCircle.fillCircle(0, 0, 24);
-    this.add(this.baseCircle);
 
     // 攻击范围圈
     this.rangeCircle = scene.add.graphics();
@@ -53,7 +47,7 @@ class Tower extends Phaser.GameObjects.Container {
     this.range = Math.floor(this.range * 1.1);
     this.attackSpeed = Math.floor(this.attackSpeed * 0.85);
 
-    this.towerSprite.setScale(0.075);
+    this.towerSprite.setScale(0.14);
 
     this.rangeCircle.clear();
     this.rangeCircle.lineStyle(1.5, this.color, 0.2);
@@ -175,7 +169,7 @@ class Tower extends Phaser.GameObjects.Container {
       hpBarBg: this.scene.add.graphics()
     };
 
-    golem.sprite.setScale(0.10);
+    golem.sprite.setScale(0.20);
     golem.sprite.setDepth(4);
 
     // 血条
@@ -185,8 +179,8 @@ class Tower extends Phaser.GameObjects.Container {
     golem.sprite.setScale(0);
     this.scene.tweens.add({
       targets: golem.sprite,
-      scaleX: 0.10,
-      scaleY: 0.10,
+      scaleX: 0.20,
+      scaleY: 0.20,
       duration: 400,
       ease: 'Back.easeOut'
     });

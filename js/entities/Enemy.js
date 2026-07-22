@@ -16,11 +16,14 @@ class Enemy {
     this.reachedEnd = false;
     this.dead = false;
     this.active = true;
-    this.blockedBy = null; // 被哪个石头人挡住
+    this.blockedBy = null;
+    this.facing = 'right'; // 当前朝向
+    this.walkTimer = 0;    // 行走动画计时器
+    this.bobOffset = 0;    // 上下弹跳偏移
 
-    // 使用素材图片
-    this.sprite = scene.add.sprite(x, y, 'enemy_imp');
-    this.sprite.setScale(0.04);
+    // 使用精灵表素材
+    this.sprite = scene.add.sprite(x, y, 'enemy_mage');
+    this.sprite.setScale(0.20);
     this.sprite.setDepth(5);
 
     // 血条背景
@@ -35,11 +38,11 @@ class Enemy {
   }
 
   updateGraphicsPosition() {
-    this.sprite.setPosition(this.x, this.y);
+    this.sprite.setPosition(this.x, this.y + this.bobOffset);
     this.hpBarBg.clear();
     this.hpBarBg.fillStyle(0x333333, 0.8);
     const barW = this.size * 2.5;
-    this.hpBarBg.fillRect(this.x - barW/2, this.y - this.size - 18, barW, 5);
+    this.hpBarBg.fillRect(this.x - barW/2, this.y - this.size - 22, barW, 5);
     this.updateHPBar();
   }
 
@@ -51,7 +54,7 @@ class Enemy {
     const barW = this.size * 2.5 * ratio;
     const totalW = this.size * 2.5;
     this.hpBar.fillStyle(barColor, 1);
-    this.hpBar.fillRect(this.x - totalW/2, this.y - this.size - 18, barW, 5);
+    this.hpBar.fillRect(this.x - totalW/2, this.y - this.size - 22, barW, 5);
   }
 
   setPath(pathPoints) {
@@ -124,7 +127,6 @@ class Enemy {
     this.dead = true;
   }
 
-  // 检查是否被石头人挡住
   checkBlockedByGolem() {
     if (!this.scene.golems || this.scene.golems.length === 0) {
       this.blockedBy = null;
@@ -142,10 +144,37 @@ class Enemy {
     return false;
   }
 
+  // 根据移动方向更新朝向和帧
+  updateFacing(dx, dy) {
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (absDx > absDy) {
+      // 水平移动
+      if (dx > 0) {
+        this.facing = 'right';
+        this.sprite.setFrame(2);
+        this.sprite.setFlipX(false);
+      } else {
+        this.facing = 'left';
+        this.sprite.setFrame(0);
+        this.sprite.setFlipX(false);
+      }
+    } else {
+      // 垂直移动
+      if (dy > 0) {
+        this.facing = 'down';
+        this.sprite.setFrame(1);
+      } else {
+        this.facing = 'up';
+        this.sprite.setFrame(3);
+      }
+    }
+  }
+
   moveAlongPath(delta) {
     if (!this.path || this.dead || this.reachedEnd) return;
 
-    // 如果被石头人挡住，停下
     if (this.checkBlockedByGolem()) {
       return;
     }
@@ -155,6 +184,7 @@ class Enemy {
     const dx = target.x - this.x;
     const dy = target.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
+
     if (dist < 3) {
       this.pathIndex++;
       if (this.pathIndex >= this.path.length) {
@@ -165,6 +195,13 @@ class Enemy {
       const moveAmount = this.speed * delta / 1000;
       this.x += (dx / dist) * moveAmount;
       this.y += (dy / dist) * moveAmount;
+
+      // 更新朝向
+      this.updateFacing(dx, dy);
+
+      // 行走弹跳效果（模拟迈步）
+      this.walkTimer += delta;
+      this.bobOffset = Math.sin(this.walkTimer * 0.012) * 3;
     }
     this.updateGraphicsPosition();
   }
