@@ -23,7 +23,7 @@ class Enemy {
 
     // 使用精灵表素材
     this.sprite = scene.add.sprite(x, y, 'enemy_mage');
-    this.sprite.setScale(0.35);
+    this.sprite.setScale(0.20);
     this.sprite.setDepth(5);
 
     // 血条背景

@@ -19,7 +19,7 @@ class Tower extends Phaser.GameObjects.Container {
 
     // 塔本体：使用 PNG 素材
     this.towerSprite = scene.add.sprite(0, 0, config.imageKey);
-    this.towerSprite.setScale(0.13);
+    this.towerSprite.setScale(0.16);
     this.add(this.towerSprite);
 
     // 攻击范围圈
@@ -47,7 +47,7 @@ class Tower extends Phaser.GameObjects.Container {
     this.range = Math.floor(this.range * 1.1);
     this.attackSpeed = Math.floor(this.attackSpeed * 0.85);
 
-    this.towerSprite.setScale(0.15);
+    this.towerSprite.setScale(0.18);
 
     this.rangeCircle.clear();
     this.rangeCircle.lineStyle(1.5, this.color, 0.2);
