@@ -169,7 +169,7 @@ class Tower extends Phaser.GameObjects.Container {
       hpBarBg: this.scene.add.graphics()
     };
 
-    golem.sprite.setScale(0.14);
+    golem.sprite.setScale(0.22);
     golem.sprite.setDepth(4);
 
     // 血条
@@ -179,8 +179,8 @@ class Tower extends Phaser.GameObjects.Container {
     golem.sprite.setScale(0);
     this.scene.tweens.add({
       targets: golem.sprite,
-      scaleX: 0.14,
-      scaleY: 0.14,
+      scaleX: 0.22,
+      scaleY: 0.22,
       duration: 400,
       ease: 'Back.easeOut'
     });
