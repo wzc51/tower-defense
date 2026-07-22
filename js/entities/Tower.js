@@ -18,11 +18,9 @@ class Tower extends Phaser.GameObjects.Container {
     this.golems = []; // 石垒召唤的小石头人
 
     // 塔本体：使用 PNG 素材
-    // 素材尺寸917x822，底座占素材大部分宽度
-    // 目标：底座显示宽度 ≈ 塔位平台内径(~80px)
-    // scale = 80 / 850 ≈ 0.094，取 0.095
+    // 0.095 偏小，调大为 0.11
     this.towerSprite = scene.add.sprite(0, 0, config.imageKey);
-    this.towerSprite.setScale(0.095);
+    this.towerSprite.setScale(0.11);
     this.add(this.towerSprite);
 
     // 攻击范围圈
@@ -50,7 +48,7 @@ class Tower extends Phaser.GameObjects.Container {
     this.range = Math.floor(this.range * 1.1);
     this.attackSpeed = Math.floor(this.attackSpeed * 0.85);
 
-    this.towerSprite.setScale(0.115);
+    this.towerSprite.setScale(0.13);
 
     this.rangeCircle.clear();
     this.rangeCircle.lineStyle(1.5, this.color, 0.2);
