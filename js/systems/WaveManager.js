@@ -6,9 +6,8 @@ class WaveManager {
     this.waveActive = false;
     this.waveComplete = false;
     this.totalWaves = 0;
-    this.spawnTimer = null;
-    this.enemiesRemaining = 0;
-    this.waves = [];
+    this.allSpawned = false;
+    this.enemyCounter = 0;
   }
 
   start(waves) {
@@ -17,27 +16,30 @@ class WaveManager {
     this.currentWaveIndex = 0;
     this.waveActive = false;
     this.waveComplete = false;
+    this.allSpawned = false;
     this.startNextWave();
   }
 
   startNextWave() {
     if (this.currentWaveIndex >= this.totalWaves) {
+      this.waveActive = false;
       this.waveComplete = true;
       this.scene.events.emit('allWavesComplete');
       return;
     }
 
     this.waveActive = true;
+    this.allSpawned = false;
     const wave = this.waves[this.currentWaveIndex];
     
     this.scene.events.emit('waveStart', this.currentWaveIndex + 1, this.totalWaves);
 
-    let delay = 1500; // 波次开始前延迟
-    let enemyCount = 0;
+    let delay = 1500;
+    let totalCount = 0;
 
     wave.enemies.forEach((group) => {
       for (let i = 0; i < group.count; i++) {
-        enemyCount++;
+        totalCount++;
         this.scene.time.delayedCall(delay, () => {
           this.spawnEnemy(group.type);
         });
@@ -45,7 +47,10 @@ class WaveManager {
       }
     });
 
-    this.enemiesRemaining = enemyCount;
+    // 所有敌人生成完毕后标记
+    this.scene.time.delayedCall(delay, () => {
+      this.allSpawned = true;
+    });
   }
 
   spawnEnemy(typeId) {
@@ -61,17 +66,27 @@ class WaveManager {
   update() {
     if (!this.waveActive || this.waveComplete) return;
 
-    // 清理已死亡的敌人，更新存活计数
+    // 清理已死亡敌人
     this.scene.enemies = this.scene.enemies.filter(e => !e.dead);
     
-    // 检查当前波次所有敌人是否已处理完毕
+    // 统计存活的敌人
     const aliveEnemies = this.scene.enemies.filter(e => e.active && !e.dead && !e.reachedEnd);
-    if (aliveEnemies.length === 0 && this.currentWaveIndex >= this.totalWaves - 1) {
-      // 最后一波清完后不自动进下一波
-    } else if (aliveEnemies.length === 0 && !this.waveActive) {
-      this.scene.time.delayedCall(2000, () => {
-        this.startNextWave();
-      });
+    
+    // 全部生成完毕 + 没有存活敌人 → 波次结束
+    if (this.allSpawned && aliveEnemies.length === 0) {
+      if (this.currentWaveIndex >= this.totalWaves - 1) {
+        // 最后一波 → 游戏胜利
+        this.waveActive = false;
+        this.waveComplete = true;
+        this.scene.events.emit('allWavesComplete');
+      } else {
+        // 进入下一波
+        this.waveActive = false;
+        this.currentWaveIndex++;
+        this.scene.time.delayedCall(2000, () => {
+          this.startNextWave();
+        });
+      }
     }
   }
 

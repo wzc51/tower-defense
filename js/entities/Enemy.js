@@ -2,67 +2,56 @@
 class Enemy {
   constructor(scene, x, y, config) {
     this.scene = scene;
-    
     this.enemyConfig = config;
     this.maxHP = config.hp;
     this.hp = config.hp;
     this.speed = config.speed;
+    this.baseSpeed = config.speed;
     this.reward = config.reward;
     this.damage = config.damage;
     this.color = config.color;
     this.size = config.size;
-    
     this.pathIndex = 0;
     this.path = null;
     this.reachedEnd = false;
     this.dead = false;
     this.active = true;
-    
-    // 绘制敌人身体
-    this.body_gfx = scene.add.graphics();
-    this.refreshGraphics();
-    
+    this.blockedBy = null; // 被哪个石头人挡住
+
+    // 使用素材图片
+    this.sprite = scene.add.sprite(x, y, 'enemy_imp');
+    this.sprite.setScale(0.35);
+    this.sprite.setDepth(5);
+
     // 血条背景
     this.hpBarBg = scene.add.graphics();
     this.hpBarBg.setDepth(10);
-    
-    // 血条
     this.hpBar = scene.add.graphics();
     this.hpBar.setDepth(11);
-    
-    // 位置
+
     this.x = x;
     this.y = y;
-    
     this.updateGraphicsPosition();
   }
 
-  refreshGraphics() {
-    this.body_gfx.clear();
-    this.body_gfx.fillStyle(this.color, 1);
-    this.body_gfx.fillCircle(this.x, this.y, this.size);
-  }
-
   updateGraphicsPosition() {
-    this.body_gfx.setPosition(0, 0);
-    this.body_gfx.clear();
-    this.body_gfx.fillStyle(this.color, 1);
-    this.body_gfx.fillCircle(this.x, this.y, this.size);
-    
+    this.sprite.setPosition(this.x, this.y);
     this.hpBarBg.clear();
     this.hpBarBg.fillStyle(0x333333, 0.8);
-    this.hpBarBg.fillRect(this.x - this.size, this.y - this.size - 10, this.size * 2, 4);
-    
+    const barW = this.size * 2.5;
+    this.hpBarBg.fillRect(this.x - barW/2, this.y - this.size - 18, barW, 5);
     this.updateHPBar();
   }
 
   updateHPBar() {
     if (this.dead) return;
     this.hpBar.clear();
-    const ratio = this.hp / this.maxHP;
+    const ratio = Math.max(0, this.hp / this.maxHP);
     const barColor = ratio > 0.5 ? 0x44cc44 : ratio > 0.25 ? 0xcccc44 : 0xcc4444;
+    const barW = this.size * 2.5 * ratio;
+    const totalW = this.size * 2.5;
     this.hpBar.fillStyle(barColor, 1);
-    this.hpBar.fillRect(this.x - this.size, this.y - this.size - 10, this.size * 2 * ratio, 4);
+    this.hpBar.fillRect(this.x - totalW/2, this.y - this.size - 18, barW, 5);
   }
 
   setPath(pathPoints) {
@@ -75,10 +64,13 @@ class Enemy {
 
   takeDamage(amount) {
     if (this.dead) return;
-    
     this.hp -= amount;
     this.updateHPBar();
-    
+    // 受击闪烁
+    this.sprite.setTint(0xff0000);
+    this.scene.time.delayedCall(100, () => {
+      if (this.sprite && this.sprite.active) this.sprite.clearTint();
+    });
     if (this.hp <= 0) {
       this.die();
     }
@@ -88,19 +80,17 @@ class Enemy {
     if (this.dead) return;
     this.dead = true;
     this.active = false;
-    
-    // 金币奖励
     if (this.scene && this.scene.events) {
       this.scene.events.emit('enemyKilled', this.reward);
     }
-    
-    // 清理图形
     this.scene.tweens.add({
-      targets: [this.body_gfx, this.hpBarBg, this.hpBar],
+      targets: this.sprite,
       alpha: 0,
+      scaleX: 0.1,
+      scaleY: 0.1,
       duration: 300,
       onComplete: () => {
-        this.body_gfx.destroy();
+        this.sprite.destroy();
         this.hpBarBg.destroy();
         this.hpBar.destroy();
       }
@@ -111,17 +101,15 @@ class Enemy {
     if (this.reachedEnd || this.dead) return;
     this.reachedEnd = true;
     this.active = false;
-    
     if (this.scene && this.scene.events) {
       this.scene.events.emit('enemyReachedEnd', this.damage);
     }
-    
     this.scene.tweens.add({
-      targets: [this.body_gfx, this.hpBarBg, this.hpBar],
+      targets: this.sprite,
       alpha: 0,
       duration: 200,
       onComplete: () => {
-        this.body_gfx.destroy();
+        this.sprite.destroy();
         this.hpBarBg.destroy();
         this.hpBar.destroy();
       }
@@ -129,23 +117,44 @@ class Enemy {
   }
 
   destroy() {
-    if (this.body_gfx && this.body_gfx.active) this.body_gfx.destroy();
+    if (this.sprite && this.sprite.active) this.sprite.destroy();
     if (this.hpBarBg && this.hpBarBg.active) this.hpBarBg.destroy();
     if (this.hpBar && this.hpBar.active) this.hpBar.destroy();
     this.active = false;
     this.dead = true;
   }
 
+  // 检查是否被石头人挡住
+  checkBlockedByGolem() {
+    if (!this.scene.golems || this.scene.golems.length === 0) {
+      this.blockedBy = null;
+      return false;
+    }
+    for (const golem of this.scene.golems) {
+      if (!golem.active) continue;
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, golem.x, golem.y);
+      if (dist < 25) {
+        this.blockedBy = golem;
+        return true;
+      }
+    }
+    this.blockedBy = null;
+    return false;
+  }
+
   moveAlongPath(delta) {
     if (!this.path || this.dead || this.reachedEnd) return;
-    
+
+    // 如果被石头人挡住，停下
+    if (this.checkBlockedByGolem()) {
+      return;
+    }
+
     const target = this.path[this.pathIndex];
     if (!target) return;
-    
     const dx = target.x - this.x;
     const dy = target.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
     if (dist < 3) {
       this.pathIndex++;
       if (this.pathIndex >= this.path.length) {
@@ -157,7 +166,6 @@ class Enemy {
       this.x += (dx / dist) * moveAmount;
       this.y += (dy / dist) * moveAmount;
     }
-    
     this.updateGraphicsPosition();
   }
 
