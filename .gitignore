@@ -1,0 +1,13 @@
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 临时文件
+*.tmp
+*.log
+*.pyc
+
+# IDE
+.vscode/
+.idea/

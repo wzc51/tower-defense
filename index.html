@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五行封妖录 - 塔防</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="js/config/towers.js"></script>
+  <script src="js/config/enemies.js"></script>
+  <script src="js/config/levels.js"></script>
+  <script src="js/entities/Projectile.js"></script>
+  <script src="js/entities/Enemy.js"></script>
+  <script src="js/entities/Tower.js"></script>
+  <script src="js/systems/WaveManager.js"></script>
+  <script src="js/scenes/BootScene.js"></script>
+  <script src="js/scenes/GameScene.js"></script>
+  <script src="js/scenes/UIScene.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
