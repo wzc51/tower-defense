@@ -20,7 +20,7 @@ class Enemy {
 
     // 使用素材图片
     this.sprite = scene.add.sprite(x, y, 'enemy_imp');
-    this.sprite.setScale(0.35);
+    this.sprite.setScale(0.04);
     this.sprite.setDepth(5);
 
     // 血条背景

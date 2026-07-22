@@ -19,7 +19,7 @@ class Tower extends Phaser.GameObjects.Container {
 
     // 塔本体：使用 PNG 素材
     this.towerSprite = scene.add.sprite(0, 0, config.imageKey);
-    this.towerSprite.setScale(0.45);
+    this.towerSprite.setScale(0.065);
     this.add(this.towerSprite);
 
     // 底座光圈（半透明地基）
@@ -53,7 +53,7 @@ class Tower extends Phaser.GameObjects.Container {
     this.range = Math.floor(this.range * 1.1);
     this.attackSpeed = Math.floor(this.attackSpeed * 0.85);
 
-    this.towerSprite.setScale(0.55);
+    this.towerSprite.setScale(0.075);
 
     this.rangeCircle.clear();
     this.rangeCircle.lineStyle(1.5, this.color, 0.2);
@@ -175,7 +175,7 @@ class Tower extends Phaser.GameObjects.Container {
       hpBarBg: this.scene.add.graphics()
     };
 
-    golem.sprite.setScale(0.25);
+    golem.sprite.setScale(0.10);
     golem.sprite.setDepth(4);
 
     // 血条
@@ -185,8 +185,8 @@ class Tower extends Phaser.GameObjects.Container {
     golem.sprite.setScale(0);
     this.scene.tweens.add({
       targets: golem.sprite,
-      scaleX: 0.25,
-      scaleY: 0.25,
+      scaleX: 0.10,
+      scaleY: 0.10,
       duration: 400,
       ease: 'Back.easeOut'
     });
