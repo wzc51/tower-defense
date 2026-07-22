@@ -37,7 +37,8 @@ class GameScene extends Phaser.Scene {
     // 波次管理器
     this.waveManager = new WaveManager(this);
     
-    // 启动HUD场景
+    // 建造菜单状态
+    this.activeBuildMenu = null;
     this.scene.launch('UIScene', { gameScene: this });
     
     // 事件监听
@@ -230,7 +231,15 @@ class GameScene extends Phaser.Scene {
   }
 
   showBuildMenu(spot, circle) {
-    // 弹出建造菜单
+    // 先关闭任何已打开的菜单
+    this.closeBuildMenu();
+    
+    // 全屏透明背景（点击此处关闭菜单）
+    const backdrop = this.add.rectangle(672, 585, 1344, 1170, 0x000000, 0.01)
+      .setInteractive()
+      .setDepth(98);
+    
+    // 菜单背景
     const menuBg = this.add.rectangle(spot.x, spot.y - 60, 280, 70, 0x1a1a2e, 0.9)
       .setStrokeStyle(1, 0xffcc00)
       .setDepth(100);
@@ -249,9 +258,7 @@ class GameScene extends Phaser.Scene {
 
     btnFire.on('pointerdown', () => {
       this.selectedTowerType = 'ember_spirit';
-      menuBg.destroy(); btnFire.destroy(); txtFire.destroy();
-      btnStone.destroy(); txtStone.destroy();
-      cancelBtn.destroy(); cancelTxt.destroy();
+      this.closeBuildMenu();
       this.handleSpotClick(spot, circle);
     });
 
@@ -263,9 +270,7 @@ class GameScene extends Phaser.Scene {
     
     btnStone.on('pointerdown', () => {
       this.selectedTowerType = 'stone_wall';
-      menuBg.destroy(); btnFire.destroy(); txtFire.destroy();
-      btnStone.destroy(); txtStone.destroy();
-      cancelBtn.destroy(); cancelTxt.destroy();
+      this.closeBuildMenu();
       this.handleSpotClick(spot, circle);
     });
     
@@ -276,21 +281,30 @@ class GameScene extends Phaser.Scene {
     const cancelTxt = this.add.text(spot.x, spot.y - 60, 'X', { ...style, fontSize: '12px' }).setOrigin(0.5).setDepth(102);
     
     cancelBtn.on('pointerdown', () => {
-      menuBg.destroy(); btnFire.destroy(); txtFire.destroy();
-      btnStone.destroy(); txtStone.destroy();
-      cancelBtn.destroy(); cancelTxt.destroy();
+      this.closeBuildMenu();
     });
     
-    // 点击其他地方关闭菜单（延迟防止同一点击事件误关）
-    this.time.delayedCall(100, () => {
-      this.input.once('pointerdown', () => {
-        if (menuBg.active) {
-          menuBg.destroy(); btnFire.destroy(); txtFire.destroy();
-          btnStone.destroy(); txtStone.destroy();
-          cancelBtn.destroy(); cancelTxt.destroy();
-        }
-      });
+    // 点击背景关闭菜单
+    backdrop.on('pointerdown', () => {
+      this.closeBuildMenu();
     });
+    
+    // 存储当前菜单引用
+    this.activeBuildMenu = { backdrop, menuBg, btnFire, txtFire, btnStone, txtStone, cancelBtn, cancelTxt };
+  }
+
+  closeBuildMenu() {
+    if (!this.activeBuildMenu) return;
+    const m = this.activeBuildMenu;
+    if (m.backdrop && m.backdrop.active) m.backdrop.destroy();
+    if (m.menuBg && m.menuBg.active) m.menuBg.destroy();
+    if (m.btnFire && m.btnFire.active) m.btnFire.destroy();
+    if (m.txtFire && m.txtFire.active) m.txtFire.destroy();
+    if (m.btnStone && m.btnStone.active) m.btnStone.destroy();
+    if (m.txtStone && m.txtStone.active) m.txtStone.destroy();
+    if (m.cancelBtn && m.cancelBtn.active) m.cancelBtn.destroy();
+    if (m.cancelTxt && m.cancelTxt.active) m.cancelTxt.destroy();
+    this.activeBuildMenu = null;
   }
 
   buildTower(x, y, config, circle) {
