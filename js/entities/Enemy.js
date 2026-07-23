@@ -16,7 +16,10 @@ class Enemy {
     this.reachedEnd = false;
     this.dead = false;
     this.active = true;
-    this.blockedBy = null;
+    this.blockedBy = null;     // 被哪个石头人锁定（仇恨），被锁定时停下
+    this.attackInterval = config.attackInterval || 1800; // 攻击石头人的间隔(ms)
+    this.leakDamage = config.leakDamage || 1; // 漏到终点时玩家损失的血量
+    this.attackCooldown = 0;
     this.facing = 'right'; // 当前朝向
     this.walkTimer = 0;    // 行走动画计时器
     this.bobOffset = 0;    // 上下弹跳偏移
@@ -83,6 +86,11 @@ class Enemy {
     if (this.dead) return;
     this.dead = true;
     this.active = false;
+    // 解除与石头人的互相锁定
+    if (this.blockedBy && !this.blockedBy.dead) {
+      this.blockedBy.engagedEnemy = null;
+    }
+    this.blockedBy = null;
     if (this.scene && this.scene.events) {
       this.scene.events.emit('enemyKilled', this.reward);
     }
@@ -105,7 +113,8 @@ class Enemy {
     this.reachedEnd = true;
     this.active = false;
     if (this.scene && this.scene.events) {
-      this.scene.events.emit('enemyReachedEnd', this.damage);
+      // 漏怪只扣固定1滴血（leakDamage），而非对石头人的伤害(damage)
+      this.scene.events.emit('enemyReachedEnd', this.leakDamage);
     }
     this.scene.tweens.add({
       targets: this.sprite,
@@ -128,17 +137,9 @@ class Enemy {
   }
 
   checkBlockedByGolem() {
-    if (!this.scene.golems || this.scene.golems.length === 0) {
-      this.blockedBy = null;
-      return false;
-    }
-    for (const golem of this.scene.golems) {
-      if (!golem.active) continue;
-      const dist = Phaser.Math.Distance.Between(this.x, this.y, golem.x, golem.y);
-      if (dist < 25) {
-        this.blockedBy = golem;
-        return true;
-      }
+    // 被某石头人锁定（仇恨）时，强制停在原地
+    if (this.blockedBy && this.blockedBy.active && !this.blockedBy.dead) {
+      return true;
     }
     this.blockedBy = null;
     return false;
@@ -208,7 +209,54 @@ class Enemy {
 
   update(delta) {
     if (this.active && !this.dead && !this.reachedEnd) {
-      this.moveAlongPath(delta);
+      if (this.checkBlockedByGolem()) {
+        // 被石头人拦截：停在原地，反击石头人
+        this.attackGolem(delta);
+      } else {
+        this.moveAlongPath(delta);
+      }
+    }
+  }
+
+  // 被石头人锁定时，周期性攻击石头人并播放攻击动作
+  attackGolem(delta) {
+    const golem = this.blockedBy;
+    if (!golem || !golem.active || golem.dead) {
+      this.blockedBy = null;
+      return;
+    }
+    this.attackCooldown -= delta;
+    if (this.attackCooldown <= 0) {
+      this.attackCooldown = this.attackInterval;
+      if (typeof golem.takeDamage === 'function') {
+        golem.takeDamage(this.damage);
+      }
+      this.playAttackAnim(golem);
+    }
+  }
+
+  // 敌人攻击石头人的动作：朝石头人扑击形变 + 命中火花
+  playAttackAnim(golem) {
+    this.sprite.setFlipX(golem.x < this.x);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleX: 0.26,
+      scaleY: 0.15,
+      duration: 90,
+      yoyo: true,
+      ease: 'Quad.easeOut'
+    });
+    for (let i = 0; i < 3; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = this.scene.add.sprite(golem.x, golem.y, 'spark')
+        .setDepth(9.5).setScale(0.6).setAlpha(0.9).setTint(0xffffff);
+      this.scene.tweens.add({
+        targets: sp,
+        x: golem.x + Math.cos(ang) * 14,
+        y: golem.y + Math.sin(ang) * 14,
+        alpha: 0, scaleX: 0.1, scaleY: 0.1, duration: 250,
+        onComplete: () => sp.destroy()
+      });
     }
   }
 }

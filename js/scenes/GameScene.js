@@ -4,9 +4,20 @@ class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  init(data) {
+    // 从主菜单传入的关卡编号（默认第1关）
+    this.selectedLevel = data && data.level ? data.level : 1;
+  }
+
   create() {
+    // 清理可能残留的旧事件监听器（防止 restart 累积）
+    this.events.off('enemyKilled');
+    this.events.off('enemyReachedEnd');
+    this.events.off('waveStart');
+    this.events.off('allWavesComplete');
+
     // 当前关卡
-    this.currentLevel = LEVELS[1];
+    this.currentLevel = LEVELS[this.selectedLevel] || LEVELS[1];
     
     // 游戏状态
     this.gold = this.currentLevel.startingGold;
@@ -14,6 +25,7 @@ class GameScene extends Phaser.Scene {
     this.selectedTowerType = null;
     this.gameOver = false;
     this.gameWon = false;
+    this.isPaused = false;  // 暂停标志（由UIScene控制）
     
     // 绘制地图背景
     this.mapBg = this.add.image(0, 0, 'map_level1').setOrigin(0, 0);
@@ -21,31 +33,32 @@ class GameScene extends Phaser.Scene {
     // ========== 动态效果 ==========
     this.createWaterEffect();
     this.createFireEffect();
-    
-    // 绘制路径（调试用，可以关掉）
-    this.drawPath();
-    
+
     // 绘制塔位
     this.drawTowerSpots();
-    
+
     // 实体组
     this.towers = this.add.group();
     this.enemies = [];
-    this.projectiles = this.add.group();
-    this.golems = [];  // 石垒召唤的小石头人
     
-    // 波次管理器
+    // 开始波次管理器（进入第一波前的准备阶段）
     this.waveManager = new WaveManager(this);
-    
+
     // 建造菜单状态
     this.activeBuildMenu = null;
     this.scene.launch('UIScene', { gameScene: this });
-    
+
+    // 集合点点击处理：选中石垒后，点地图空地(范围内)设置集合点
+    this.input.on('pointerdown', this.handleGlobalPointerDown, this);
+    this.events.once('shutdown', () => {
+      this.input.off('pointerdown', this.handleGlobalPointerDown, this);
+    });
+
     // 事件监听
     this.events.on('enemyKilled', (reward) => {
       this.gold += reward;
     });
-    
+
     this.events.on('enemyReachedEnd', (damage) => {
       this.lives -= damage;
       if (this.lives <= 0) {
@@ -53,17 +66,17 @@ class GameScene extends Phaser.Scene {
         this.handleGameOver();
       }
     });
-    
+
     this.events.on('waveStart', (current, total) => {
       // 由UI处理
     });
-    
+
     this.events.on('allWavesComplete', () => {
       this.checkWin();
     });
-    
-    // 开始第一波
-    this.time.delayedCall(2000, () => {
+
+    // 延迟启动波次（先进入准备阶段）
+    this.time.delayedCall(1500, () => {
       this.waveManager.start(this.currentLevel.waves);
     });
   }
@@ -167,19 +180,6 @@ class GameScene extends Phaser.Scene {
     });
   }
 
-  // ========== 绘制路径 ==========
-  drawPath() {
-    const path = this.currentLevel.path;
-    const g = this.add.graphics();
-    g.lineStyle(3, 0xff0000, 0.15);
-    g.beginPath();
-    g.moveTo(path[0].x, path[0].y);
-    for (let i = 1; i < path.length; i++) {
-      g.lineTo(path[i].x, path[i].y);
-    }
-    g.strokePath();
-  }
-
   // ========== 绘制塔位 ==========
   drawTowerSpots() {
     this.towerSpotZones = [];
@@ -190,6 +190,7 @@ class GameScene extends Phaser.Scene {
       circle.setStrokeStyle(1.5, 0xffff00, 0.4);
       circle.setInteractive({ useHandCursor: true });
       circle.setDepth(2);
+      circle.setData('isSpot', true); // 供集合点点击处理识别塔位
       
       // 悬停高亮
       circle.on('pointerover', () => {
@@ -214,16 +215,20 @@ class GameScene extends Phaser.Scene {
 
   handleSpotClick(spot, circle) {
     if (this.gameOver || this.gameWon) return;
-    
-    // 检查是否已有塔
-    if (this.getTowerAt(spot.x, spot.y)) return;
-    
+
+    // 检查是否已有塔 → 弹出信息面板（升级/出售）
+    const existing = this.getTowerAt(spot.x, spot.y);
+    if (existing) {
+      this.showTowerInfo(existing, spot, circle);
+      return;
+    }
+
     // 检查是否选择了塔类型
     if (!this.selectedTowerType) {
       this.showBuildMenu(spot, circle);
       return;
     }
-    
+
     const config = TOWER_CONFIG[this.selectedTowerType];
     if (this.gold >= config.cost) {
       this.buildTower(spot.x, spot.y, config, circle);
@@ -307,8 +312,135 @@ class GameScene extends Phaser.Scene {
     this.activeBuildMenu = null;
   }
 
+  // ========== 塔信息面板（升级 / 出售）==========
+  showTowerInfo(tower, spot, circle) {
+    this.closeBuildMenu();
+    this.closeTowerInfo();
+
+    const cfg = tower.towerConfig;
+    const canUpgrade = tower.level < tower.maxLevel && this.gold >= tower.upgradeCost;
+    const sellValue = Math.floor(tower.totalInvested * tower.sellRatio);
+
+    // 全屏透明背景（点击关闭）
+    const backdrop = this.add.rectangle(672, 585, 1344, 1170, 0x000000, 0.01)
+      .setInteractive().setDepth(98);
+
+    // 面板背景
+    const panel = this.add.rectangle(spot.x, spot.y - 90, 300, 200, 0x1a1a2e, 0.92)
+      .setStrokeStyle(2, 0xffcc00).setDepth(100);
+
+    const titleStyle = { font: 'bold 16px sans-serif', fill: '#ffd700' };
+    const style = { font: '14px sans-serif', fill: '#ffffff' };
+    const dimStyle = { font: '13px sans-serif', fill: '#aaaaaa' };
+
+    // 标题
+    const txtName = this.add.text(spot.x, spot.y - 170, `${cfg.name}  Lv.${tower.level}/${tower.maxLevel}`, titleStyle)
+      .setOrigin(0.5).setDepth(101);
+
+    // 属性
+    const txtDmg = this.add.text(spot.x, spot.y - 145, `伤害: ${tower.damage}`, style).setOrigin(0.5).setDepth(101);
+    const txtRange = this.add.text(spot.x, spot.y - 125, `射程: ${tower.range}`, style).setOrigin(0.5).setDepth(101);
+    const txtSpd = this.add.text(spot.x, spot.y - 105, `攻速: ${(1000 / tower.attackSpeed).toFixed(1)}/s`, style).setOrigin(0.5).setDepth(101);
+    const txtInvested = this.add.text(spot.x, spot.y - 85, `已投入: ${tower.totalInvested}金`, dimStyle).setOrigin(0.5).setDepth(101);
+
+    // 升级按钮
+    const btnUp = this.add.rectangle(spot.x - 65, spot.y - 45, 110, 40,
+      canUpgrade ? 0x448844 : 0x333333, canUpgrade ? 0.9 : 0.5)
+      .setStrokeStyle(1, canUpgrade ? 0x66cc66 : 0x555555)
+      .setInteractive({ useHandCursor: canUpgrade }).setDepth(101);
+
+    const txtUp = this.add.text(spot.x - 65, spot.y - 45,
+      canUpgrade ? `升级\n${tower.upgradeCost}金` : `已满级`,
+      { ...style, fontSize: '12px', fill: canUpgrade ? '#ffffff' : '#666666', align: 'center' }
+    ).setOrigin(0.5).setDepth(102);
+
+    btnUp.on('pointerdown', () => {
+      this.upgradeTower(tower);
+      this.closeTowerInfo();
+    });
+
+    // 出售按钮
+    const btnSell = this.add.rectangle(spot.x + 65, spot.y - 45, 110, 40, 0x884422, 0.8)
+      .setStrokeStyle(1, 0xcc7733).setInteractive({ useHandCursor: true }).setDepth(101);
+
+    const txtSell = this.add.text(spot.x + 65, spot.y - 45, `出售\n+${sellValue}金`,
+      { ...style, fontSize: '12px', align: 'center' }
+    ).setOrigin(0.5).setDepth(102);
+
+    btnSell.on('pointerdown', () => {
+      this.sellTower(tower, spot, circle);
+      this.closeTowerInfo();
+    });
+
+    // 关闭按钮
+    const btnClose = this.add.rectangle(spot.x, spot.y + 10, 50, 24, 0x444444, 0.8)
+      .setInteractive({ useHandCursor: true }).setDepth(101);
+    const txtClose = this.add.text(spot.x, spot.y + 10, '关闭', { ...style, fontSize: '12px' })
+      .setOrigin(0.5).setDepth(102);
+
+    btnClose.on('pointerdown', () => this.closeTowerInfo());
+
+    backdrop.on('pointerdown', () => this.closeTowerInfo());
+
+    // 同时显示攻击范围圈
+    tower.rangePinned = true;
+    tower.showRange(true);
+
+    this.activeTowerInfo = {
+      backdrop, panel, txtName, txtDmg, txtRange, txtSpd, txtInvested,
+      btnUp, txtUp, btnSell, txtSell, btnClose, txtClose
+    };
+  }
+
+  closeTowerInfo() {
+    if (!this.activeTowerInfo) return;
+    const m = this.activeTowerInfo;
+    Object.values(m).forEach(obj => {
+      if (obj && obj.active) obj.destroy();
+    });
+    this.activeTowerInfo = null;
+
+    // 取消所有塔的固定范围圈
+    this.towers.getChildren().forEach(t => {
+      t.rangePinned = false;
+      t.hideRange();
+    });
+  }
+
+  upgradeTower(tower) {
+    if (tower.level >= tower.maxLevel) return;
+    if (this.gold < tower.upgradeCost) return;
+    if (!tower.upgrade()) return; // upgrade() 内部处理等级上限
+
+    this.gold -= tower.upgradeCost;
+    // 升级成功视觉反馈
+    if (tower.towerSprite) {
+      tower.towerSprite.setTint(0x88ff88);
+      this.time.delayedCall(200, () => {
+        if (tower.towerSprite && tower.towerSprite.active) tower.towerSprite.clearTint();
+      });
+    }
+  }
+
+  sellTower(tower, spot, circle) {
+    const refund = Math.floor(tower.totalInvested * tower.sellRatio);
+    this.gold += refund;
+
+    // 移除塔
+    this.towers.remove(tower, true); // 从组中移除并销毁
+
+    // 恢复塔位标记
+    circle.setFillStyle(0xffff00, 0.15);
+    circle.setStrokeStyle(1.5, 0xffff00, 0.4);
+    circle.setInteractive({ useHandCursor: true });
+  }
+
   buildTower(x, y, config, circle) {
     // 建造完成，扣除金币并创建塔
+    // 取消其他塔的范围圈固定显示（避免多个范围圈重叠）
+    this.towers.getChildren().forEach(t => {
+      if (t.rangePinned) { t.rangePinned = false; if (t.hideRange) t.hideRange(); }
+    });
     const tower = new Tower(this, x, y, config);
     this.towers.add(tower);
     
@@ -335,51 +467,116 @@ class GameScene extends Phaser.Scene {
   }
 
   getTowerAt(x, y) {
-    return this.towers.getChildren().find(t => 
+    return this.towers.getChildren().find(t =>
       Phaser.Math.Distance.Between(t.x, t.y, x, y) < 25
     );
   }
 
+  // ========== 集合点点击处理 ==========
+  // 当某个石垒被选中(pinned)时，点击地图空地(在集合点范围内)即可设置集合点
+  handleGlobalPointerDown(pointer, currentlyOver) {
+    if (this.gameOver || this.gameWon) return;
+    // 点在了塔/塔位/菜单等可交互对象上 → 交给它们处理，不设置集合点
+    if (currentlyOver && currentlyOver.length > 0) return;
+
+    const selected = this.towers.getChildren().find(t =>
+      t.towerConfig && t.towerConfig.id === 'stone_wall' && t.rangePinned
+    );
+    if (!selected) return;
+
+    const wx = pointer.worldX, wy = pointer.worldY;
+    if (Phaser.Math.Distance.Between(selected.x, selected.y, wx, wy) <= selected.rallyRange) {
+      selected.setRallyPoint(wx, wy);
+    }
+  }
+
   // ========== 游戏结束 ==========
   handleGameOver() {
+    if (this.gameOver || this.gameWon) return; // 胜负互斥，避免竞态
     this.gameOver = true;
     const overlay = this.add.rectangle(672, 585, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6).setDepth(200);
     const text = this.add.text(672, 500, '防守失败', {
-      font: '40px sans-serif', fill: '#ff4444'
+      font: 'bold 40px sans-serif', fill: '#ff4444'
     }).setOrigin(0.5).setDepth(201);
-    const subtext = this.add.text(672, 560, '点击重新开始', {
-      font: '18px sans-serif', fill: '#ffffff'
+
+    const retryBtn = this.add.text(672, 570, '🔄 重新挑战', {
+      font: '18px sans-serif', fill: '#ffffff',
+      backgroundColor: '#442222', padding: { x: 12, y: 8 }
     }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
-    
-    subtext.on('pointerdown', () => {
+    retryBtn.on('pointerdown', () => {
       this.scene.restart();
       this.scene.stop('UIScene');
+    });
+
+    const menuBtn = this.add.text(672, 620, '返回主菜单', {
+      font: '16px sans-serif', fill: '#aaaaaa'
+    }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerdown', () => {
+      this.scene.stop('UIScene');
+      this.scene.start('MenuScene');
     });
   }
 
   checkWin() {
     this.time.delayedCall(1000, () => {
+      if (this.gameOver) return; // 已失败则不再判胜
       if (this.waveManager.isAllComplete() && this.lives > 0) {
         this.gameWon = true;
         const overlay = this.add.rectangle(672, 585, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6).setDepth(200);
-        const text = this.add.text(672, 500, '胜利！', {
-          font: '40px sans-serif', fill: '#44ff44'
+        const text = this.add.text(672, 480, '🎉 胜利！', {
+          font: 'bold 40px sans-serif', fill: '#44ff44'
         }).setOrigin(0.5).setDepth(201);
-        const subtext = this.add.text(672, 560, '点击重新开始', {
-          font: '18px sans-serif', fill: '#ffffff'
-        }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
-        
-        subtext.on('pointerdown', () => {
-          this.scene.restart();
-          this.scene.stop('UIScene');
-        });
+
+        // 判断是否有下一关
+        const nextLevel = this.selectedLevel + 1;
+        const hasNextLevel = LEVELS[nextLevel] !== undefined;
+
+        if (hasNextLevel) {
+          const subtext = this.add.text(672, 550, `第 ${this.selectedLevel} 关通关！`, {
+            font: '20px sans-serif', fill: '#ffffff'
+          }).setOrigin(0.5).setDepth(201);
+
+          const nextBtn = this.add.text(672, 620, '▶ 进入下一关 ▶', {
+            font: 'bold 22px sans-serif', fill: '#ffcc00',
+            backgroundColor: '#334422', padding: { x: 16, y: 10 }
+          }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
+
+          nextBtn.on('pointerover', () => nextBtn.setFill('#ffee55'));
+          nextBtn.on('pointerout', () => nextBtn.setFill('#ffcc00'));
+          nextBtn.on('pointerdown', () => {
+            this.scene.stop('UIScene');
+            this.scene.restart({ level: nextLevel });
+          });
+
+          const menuBtn = this.add.text(672, 680, '返回主菜单', {
+            font: '16px sans-serif', fill: '#aaaaaa'
+          }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
+          menuBtn.on('pointerdown', () => {
+            this.scene.stop('UIScene');
+            this.scene.start('MenuScene');
+          });
+        } else {
+          // 全部通关
+          const subtext = this.add.text(672, 540, '恭喜通关全部关卡！', {
+            font: '22px sans-serif', fill: '#ffd700'
+          }).setOrigin(0.5).setDepth(201);
+
+          const menuBtn = this.add.text(672, 610, '返回主菜单', {
+            font: '18px sans-serif', fill: '#ffffff',
+            backgroundColor: '#333355', padding: { x: 12, y: 8 }
+          }).setOrigin(0.5).setDepth(201).setInteractive({ useHandCursor: true });
+          menuBtn.on('pointerdown', () => {
+            this.scene.stop('UIScene');
+            this.scene.start('MenuScene');
+          });
+        }
       }
     });
   }
 
   // ========== 更新循环 ==========
   update(time, delta) {
-    if (this.gameOver || this.gameWon) return;
+    if (this.gameOver || this.gameWon || this.isPaused) return;
     
     // 更新敌人
     this.enemies.forEach(enemy => {
@@ -391,15 +588,10 @@ class GameScene extends Phaser.Scene {
     // 清理死亡敌人
     this.enemies = this.enemies.filter(e => !e.dead);
 
-    // 清理死亡小石头人
-    if (this.golems) {
-      this.golems = this.golems.filter(g => g.active);
-    }
-    
-    // 更新塔
+    // 更新塔（石垒需要delta驱动石头人状态机）
     this.towers.getChildren().forEach(tower => {
       if (tower.active) {
-        tower.update(time, this.enemies);
+        tower.update(time, this.enemies, delta);
       }
     });
     
